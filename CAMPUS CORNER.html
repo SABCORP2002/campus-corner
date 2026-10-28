@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Campus Corner">
+<title>CAMPUS CORNER</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--tx:#1c1c1a;--mut:#6b6b66;--ac:#1d4ed8;--act:#fff;--ok:#15803d;--bad:#b91c1c;--bd:#e5e3dc;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121211;--card:#1e1e1c;--tx:#f2f1ed;--mut:#a3a29b;--ac:#6d9bff;--act:#0b0b0a;--ok:#4ade80;--bad:#f87171;--bd:#33332f;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121211;--card:#1e1e1c;--tx:#f2f1ed;--mut:#a3a29b;--ac:#6d9bff;--act:#0b0b0a;--ok:#4ade80;--bad:#f87171;--bd:#33332f;color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding-bottom:84px}
+header{padding:16px 16px 4px}
+h1{margin:0;font-size:22px;letter-spacing:.5px}
+h1 span{color:var(--ac)}
+.sub{color:var(--mut);font-size:13px}
+main{padding:8px 16px 16px;max-width:640px;margin:0 auto}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom,0px);z-index:5}
+nav button{flex:1;border:0;background:none;color:var(--mut);padding:12px 4px;font-size:13px;font-weight:600}
+nav button.on{color:var(--ac)}
+nav b{display:block;font-size:20px;font-weight:400}
+.chips{display:flex;gap:8px;margin:8px 0 12px;overflow-x:auto}
+.chip{border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:20px;padding:7px 14px;font-size:14px;white-space:nowrap}
+.chip.on{background:var(--ac);color:var(--act);border-color:var(--ac)}
+.card{display:flex;gap:12px;background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:10px;margin-bottom:10px;align-items:center}
+.th{width:64px;height:64px;border-radius:10px;object-fit:cover;background:var(--bd);flex:none}
+.card .i{flex:1;min-width:0}
+.card .n{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .m{color:var(--mut);font-size:13px}
+.tag{font-size:12px;font-weight:700;padding:2px 8px;border-radius:10px;border:1px solid var(--bd)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}
+label{display:block;font-size:13px;color:var(--mut);margin:12px 0 4px}
+input,select{width:100%;font-size:16px;padding:12px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--tx)}
+.btn{display:block;width:100%;border:0;border-radius:12px;background:var(--ac);color:var(--act);font-size:16px;font-weight:700;padding:14px;margin-top:16px}
+.btn.s{background:var(--card);color:var(--tx);border:1px solid var(--bd)}
+.btn.d{background:none;color:var(--bad);border:1px solid var(--bd)}
+.photo{display:flex;align-items:center;justify-content:center;height:180px;border:2px dashed var(--bd);border-radius:14px;color:var(--mut);overflow:hidden;background:var(--card)}
+.photo img{width:100%;height:100%;object-fit:cover}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.k{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px}
+.k small{color:var(--mut);display:block;font-size:12px}
+.k strong{font-size:17px}
+.empty{text-align:center;color:var(--mut);padding:40px 10px}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10;display:flex;align-items:flex-end}
+.sheet>div{background:var(--bg);width:100%;max-height:92%;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(24px + env(safe-area-inset-bottom,0px))}
+.log{font-size:13px;color:var(--mut);padding-left:16px;margin:6px 0}
+.hide{display:none}
+.warn{background:var(--card);border:1px solid var(--bad);color:var(--bad);border-radius:10px;padding:8px 12px;margin:8px 0;font-size:13px}
+</style>
+</head>
+<body>
+<header><h1>CAMPUS <span>CORNER</span></h1><div class="sub">Stock, ventes et bénéfices</div></header>
+<main id="app"></main>
+<nav>
+<button data-v="stock"><b>▦</b>Stock</button>
+<button data-v="add"><b>＋</b>Ajouter</button>
+<button data-v="bilan"><b>◔</b>Bilan</button>
+</nav>
+<div id="sheet" class="sheet hide"><div id="sheetc"></div></div>
+<script>
+var $=function(s){return document.querySelector(s)};
+var DB=null,items=[],view="stock",filter="dispo",dropF="",period="mois",draftPhoto="";
+var today=function(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+var fmt=function(n){return new Intl.NumberFormat("fr-FR").format(Math.round(n||0))+" FCFA"};
+var fd=function(s){if(!s)return"";var p=s.split("-");return p[2]+"/"+p[1]+"/"+p[0]};
+var esc=function(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})};
+
+function openDB(){return new Promise(function(res,rej){try{var r=indexedDB.open("campuscorner",1);r.onupgradeneeded=function(){r.result.createObjectStore("items",{keyPath:"id"})};r.onsuccess=function(){res(r.result)};r.onerror=function(){rej(r.error)}}catch(e){rej(e)}})}
+function loadAll(){return new Promise(function(res){if(!DB)return res([]);var q=DB.transaction("items").objectStore("items").getAll();q.onsuccess=function(){res(q.result||[])};q.onerror=function(){res([])}})}
+function put(it){return new Promise(function(res){if(!DB)return res();var t=DB.transaction("items","readwrite");t.objectStore("items").put(it);t.oncomplete=res;t.onerror=res})}
+function del(id){return new Promise(function(res){if(!DB)return res();var t=DB.transaction("items","readwrite");t.objectStore("items").delete(id);t.oncomplete=res;t.onerror=res})}
+
+function compress(file){return new Promise(function(res){var r=new FileReader();r.onload=function(){var im=new Image();im.onload=function(){var m=720,s=Math.min(1,m/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.round(im.width*s);c.height=Math.round(im.height*s);c.getContext("2d").drawImage(im,0,0,c.width,c.height);res(c.toDataURL("image/jpeg",.72))};im.onerror=function(){res("")};im.src=r.result};r.onerror=function(){res("")};r.readAsDataURL(file)})}
+
+function nextN(){return items.reduce(function(m,i){return Math.max(m,i.n)},0)+1}
+function byN(n){return items.filter(function(i){return i.n===n})[0]}
+function dn(i){return i.drop||"Sans drop"}
+function inD(i){return !dropF||dn(i)===dropF}
+function drops(){var s=[],a=items.slice().sort(function(x,y){return y.n-x.n});a.forEach(function(i){var d=dn(i);if(s.indexOf(d)<0)s.push(d)});return s}
+function lastDrop(){var a=items.slice().sort(function(x,y){return y.n-x.n});return a.length&&a[0].drop?a[0].drop:""}
+function setD(v){dropF=v;render()}
+function dropSel(){var d=drops();if(!d.length)return"";return'<select onchange="setD(this.value)"><option value="">Tous les drops</option>'+d.map(function(x){return'<option'+(x===dropF?" selected":"")+' value="'+esc(x)+'">'+esc(x)+'</option>'}).join("")+'</select>'}
+
+function render(){
+  document.querySelectorAll("nav button").forEach(function(b){b.classList.toggle("on",b.dataset.v===view)});
+  var h=DB?"":'<div class="warn">Le stockage est indisponible dans ce navigateur : les données seront perdues à la fermeture.</div>';
+  if(view==="stock")h+=vStock();else if(view==="add")h+=vAdd();else h+=vBilan();
+  $("#app").innerHTML=h;
+}
+
+function vStock(){
+  var c={dispo:0,vendu:0};items.filter(inD).forEach(function(i){c[i.vendu?"vendu":"dispo"]++});
+  var list=items.filter(inD).filter(function(i){return filter==="tous"||(filter==="vendu")===!!i.vendu}).sort(function(a,b){return b.n-a.n});
+  var h=dropSel()+'<div class="chips">'+[["dispo","Disponibles ("+c.dispo+")"],["vendu","Vendus ("+c.vendu+")"],["tous","Tous"]].map(function(f){return'<button class="chip'+(filter===f[0]?" on":"")+'" onclick="setF(\''+f[0]+'\')">'+f[1]+'</button>'}).join("")+'</div>';
+  if(!list.length)return h+'<div class="empty">Aucun article ici.<br>Appuie sur « Ajouter » pour enregistrer ton premier vêtement.</div>';
+  return h+list.map(function(i){
+    return'<div class="card" onclick="detail('+i.n+')">'+(i.photo?'<img class="th" src="'+i.photo+'" alt="">':'<div class="th"></div>')+
+    '<div class="i"><div class="n">#'+i.n+" · "+esc(i.nom)+'</div><div class="m">'+esc(dn(i))+" · "+(i.taille?"T. "+esc(i.taille)+" · ":"")+"Acheté "+fmt(i.achat)+'</div><div class="m">'+(i.vendu?'Vendu '+fmt(i.prixVente)+" le "+fd(i.dateVente):'Prix prévu '+fmt(i.prevu))+'</div></div>'+
+    '<span class="tag '+(i.vendu?"ok":"")+'">'+(i.vendu?"Vendu":"En stock")+'</span></div>'}).join("");
+}
+function setF(f){filter=f;render()}
+
+function vAdd(){
+  return'<label class="photo" for="pf">'+(draftPhoto?'<img src="'+draftPhoto+'" alt="">':"📷 Prendre ou choisir une photo")+'</label><input id="pf" type="file" accept="image/*" class="hide" onchange="onPhoto(this)">'+
+  '<label>Drop</label><input id="f_drop" list="dl" value="'+esc(lastDrop())+'" placeholder="Ex : Drop pantalons"><datalist id="dl">'+drops().map(function(d){return'<option value="'+esc(d)+'">'}).join("")+'</datalist><label>Nom du vêtement</label><input id="f_nom" placeholder="Ex : Jean Levi’s bleu">'+
+  '<label>Taille</label><input id="f_taille" placeholder="Ex : M, 42…">'+
+  '<label>Prix d’achat (FCFA)</label><input id="f_achat" type="number" inputmode="numeric">'+
+  '<label>Prix de vente prévu (FCFA)</label><input id="f_prevu" type="number" inputmode="numeric">'+
+  '<label>Date d’achat</label><input id="f_date" type="date" value="'+today()+'">'+
+  '<button class="btn" onclick="addItem()">Enregistrer l’article</button>';
+}
+async function onPhoto(el){var f=el.files&&el.files[0];if(!f)return;var keep=snap();draftPhoto=await compress(f);render();restore(keep)}
+function snap(){var o={};["drop","nom","taille","achat","prevu","date"].forEach(function(k){var e=$("#f_"+k);if(e)o[k]=e.value});return o}
+function restore(o){for(var k in o){var e=$("#f_"+k);if(e)e.value=o[k]}}
+async function addItem(){
+  var nom=$("#f_nom").value.trim(),achat=parseFloat($("#f_achat").value);
+  if(!nom||isNaN(achat)){alert("Indique au moins le nom et le prix d’achat.");return}
+  var d=$("#f_date").value||today();
+  var it={id:Date.now(),n:nextN(),drop:($("#f_drop").value.trim()||"Sans drop"),nom:nom,taille:$("#f_taille").value.trim(),photo:draftPhoto,achat:achat,prevu:parseFloat($("#f_prevu").value)||0,dateAchat:d,vendu:false,prixVente:0,dateVente:"",log:[{d:d,t:"Acheté "+fmt(achat)}]};
+  items.push(it);await put(it);draftPhoto="";filter="dispo";view="stock";render();
+}
+
+function detail(n){
+  var i=byN(n);if(!i)return;
+  var h='<h2 style="margin:0 0 8px">#'+i.n+" · "+esc(i.nom)+"</h2>"+(i.photo?'<img src="'+i.photo+'" alt="" style="width:100%;max-height:300px;object-fit:cover;border-radius:12px">':"")+
+  '<div class="m" style="margin-top:8px">Drop : '+esc(dn(i))+"<br>"+(i.taille?"Taille "+esc(i.taille)+"<br>":"")+"Prix d’achat : "+fmt(i.achat)+"<br>Prix prévu : "+fmt(i.prevu)+(i.vendu?"<br>Vendu : "+fmt(i.prixVente)+" le "+fd(i.dateVente)+"<br><b class=\""+(i.prixVente-i.achat>=0?"ok":"bad")+"\">Bénéfice : "+fmt(i.prixVente-i.achat)+"</b>":"")+'</div>'+
+  '<div style="margin-top:12px;font-weight:600">Historique</div>'+i.log.map(function(l){return'<div class="log">'+fd(l.d)+" — "+esc(l.t)+"</div>"}).join("");
+  if(!i.vendu)h+='<label>Prix de vente réel (FCFA)</label><input id="s_prix" type="number" inputmode="numeric" value="'+(i.prevu||"")+'"><label>Date de vente</label><input id="s_date" type="date" value="'+today()+'"><button class="btn" onclick="sell('+i.n+')">Marquer comme vendu</button>';
+  else h+='<button class="btn s" onclick="unsell('+i.n+')">Annuler la vente</button>';
+  h+='<button class="btn d" onclick="removeItem('+i.n+')">Supprimer l’article</button><button class="btn s" onclick="closeSheet()">Fermer</button>';
+  $("#sheetc").innerHTML=h;$("#sheet").classList.remove("hide");
+}
+function closeSheet(){$("#sheet").classList.add("hide")}
+async function sell(n){var i=byN(n),p=parseFloat($("#s_prix").value);if(isNaN(p)){alert("Indique le prix de vente.");return}
+  i.vendu=true;i.prixVente=p;i.dateVente=$("#s_date").value||today();i.log.push({d:i.dateVente,t:"Vendu "+fmt(p)});await put(i);closeSheet();render()}
+async function unsell(n){var i=byN(n);i.vendu=false;i.prixVente=0;i.dateVente="";i.log.push({d:today(),t:"Vente annulée, remis en stock"});await put(i);closeSheet();render()}
+async function removeItem(n){if(!confirm("Supprimer définitivement cet article ?"))return;var i=byN(n);items=items.filter(function(x){return x.n!==n});await del(i.id);closeSheet();render()}
+
+function inP(d){if(!d)return false;if(period==="tout")return true;var t=new Date(d+"T00:00:00"),now=new Date(today()+"T00:00:00");
+  if(period==="jour")return d===today();
+  if(period==="semaine"){var s=new Date(now);s.setDate(s.getDate()-((s.getDay()+6)%7));return t>=s}
+  return t.getFullYear()===now.getFullYear()&&t.getMonth()===now.getMonth()}
+function vBilan(){
+  var sold=items.filter(function(i){return i.vendu&&inP(i.dateVente)}),bought=items.filter(function(i){return inP(i.dateAchat)});
+  var ca=sold.reduce(function(s,i){return s+i.prixVente},0),cost=sold.reduce(function(s,i){return s+i.achat},0),ach=bought.reduce(function(s,i){return s+i.achat},0);
+  var st=items.filter(function(i){return!i.vendu}),sv=st.reduce(function(s,i){return s+i.achat},0),pot=st.reduce(function(s,i){return s+i.prevu},0),b=ca-cost;
+  var h='<div class="chips">'+[["jour","Aujourd’hui"],["semaine","Semaine"],["mois","Mois"],["tout","Tout"]].map(function(p){return'<button class="chip'+(period===p[0]?" on":"")+'" onclick="setP(\''+p[0]+'\')">'+p[1]+'</button>'}).join("")+'</div>';
+  h+='<div class="grid"><div class="k"><small>Ventes (chiffre d’affaires)</small><strong>'+fmt(ca)+'</strong></div><div class="k"><small>Bénéfice</small><strong class="'+(b>=0?"ok":"bad")+'">'+fmt(b)+'</strong></div><div class="k"><small>Articles vendus</small><strong>'+sold.length+'</strong></div><div class="k"><small>Achats de la période</small><strong>'+fmt(ach)+'</strong></div></div>';
+  h+='<div style="margin:18px 0 4px;font-weight:600">Stock actuel</div><div class="grid"><div class="k"><small>Articles en stock</small><strong>'+st.length+'</strong></div><div class="k"><small>Valeur (à l’achat)</small><strong>'+fmt(sv)+'</strong></div><div class="k" style="grid-column:span 2"><small>Valeur de vente prévue</small><strong>'+fmt(pot)+'</strong></div></div>';
+  h+='<div style="margin:18px 0 4px;font-weight:600">Bilan par drop</div>';
+  if(!items.length)h+='<div class="sub">Aucun drop pour le moment.</div>';
+  drops().forEach(function(d){var a=items.filter(function(i){return dn(i)===d}),v=a.filter(function(i){return i.vendu}),inv=a.reduce(function(s,i){return s+i.achat},0),rev=v.reduce(function(s,i){return s+i.prixVente},0),bn=rev-v.reduce(function(s,i){return s+i.achat},0),rest=a.filter(function(i){return!i.vendu}),pot=rest.reduce(function(s,i){return s+(i.prevu?i.prevu-i.achat:0)},0);
+    h+='<div class="k" style="margin-bottom:10px"><strong>'+esc(d)+'</strong><small>'+a.length+' articles · '+v.length+' vendus · '+rest.length+' en stock</small><div style="margin-top:6px;font-size:14px;line-height:1.7">Investi (achats) : '+fmt(inv)+'<br>Ventes encaissées : '+fmt(rev)+'<br><b class="'+(bn>=0?"ok":"bad")+'">Bénéfice réalisé : '+fmt(bn)+'</b><br>Bénéfice encore attendu : '+fmt(pot)+'</div></div>'});
+  h+='<button class="btn s" onclick="backup()">Sauvegarder mes données</button><div class="sub" style="margin-top:8px">Tes données sont enregistrées dans ce navigateur, sur ton iPhone. Fais une sauvegarde de temps en temps.</div>';
+  return h;
+}
+function setP(p){period=p;render()}
+async function backup(){try{var d=await claude.use("downloads");if(!d){alert("La sauvegarde n’est pas disponible ici.");return}
+  await d.save({filename:"campus-corner-"+today()+".json",data:new Blob([JSON.stringify(items)],{type:"application/json"})})}catch(e){}}
+
+document.querySelectorAll("nav button").forEach(function(b){b.onclick=function(){view=b.dataset.v;render();window.scrollTo(0,0)}});
+$("#sheet").addEventListener("click",function(e){if(e.target.id==="sheet")closeSheet()});
+(async function(){try{DB=await openDB();items=await loadAll()}catch(e){DB=null}render()})();
+</script>
+</body>
+</html>

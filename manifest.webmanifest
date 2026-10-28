@@ -1,0 +1,21 @@
+{
+  "name": "Campus Corner - Gestion de Stock & Ventes",
+  "short_name": "CampusCorner",
+  "description": "Application professionnelle de gestion de stock, friperie, drops et suivi des bénéfices en FCFA.",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "lang": "fr",
+  "categories": ["business", "finance", "shopping"],
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
