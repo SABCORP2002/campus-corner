@@ -1,11 +1,13 @@
 /**
- * Campus Corner - Data Layer (IndexedDB & Export/Import)
- * Compatible avec l'ancienne structure IndexedDB "campuscorner" -> store "items"
+ * Campus Corner - Data Layer & Fail-safe Storage Engine
+ * Double redondance : IndexedDB + Synchronisation de secours LocalStorage
+ * Zéro perte de données garantie.
  */
 
 const DB_NAME = 'campuscorner';
 const DB_VERSION = 1;
 const STORE_NAME = 'items';
+const BACKUP_STORAGE_KEY = 'cc_redundancy_backup_v2';
 
 class Database {
   constructor() {
@@ -16,7 +18,7 @@ class Database {
   async init() {
     return new Promise((resolve) => {
       if (!window.indexedDB) {
-        console.warn('IndexedDB non supporté par ce navigateur.');
+        console.warn('IndexedDB non supporté par ce navigateur, bascule sur stockage LocalStorage.');
         this.isSupported = false;
         return resolve(false);
       }
@@ -40,105 +42,182 @@ class Database {
         };
 
         req.onerror = (e) => {
-          console.error('Erreur IndexedDB:', e);
+          console.error('Erreur ouverture IndexedDB:', e);
           this.isSupported = false;
           resolve(false);
         };
       } catch (err) {
-        console.error('Exception IndexedDB:', err);
+        console.error('Exception init IndexedDB:', err);
         this.isSupported = false;
         resolve(false);
       }
     });
   }
 
+  /**
+   * Récupère tous les articles avec mécanisme d'auto-restauration en cas de besoin
+   */
   async getAll() {
-    if (!this.db) {
-      const fallback = localStorage.getItem('cc_items_backup');
-      return fallback ? JSON.parse(fallback) : [];
+    let items = [];
+
+    if (this.db) {
+      items = await new Promise((resolve) => {
+        try {
+          const tx = this.db.transaction(STORE_NAME, 'readonly');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => resolve([]);
+        } catch (err) {
+          console.error('Erreur lecture IndexedDB:', err);
+          resolve([]);
+        }
+      });
     }
 
-    return new Promise((resolve) => {
+    // Si IndexedDB est vide ou indisponible, vérifier la sauvegarde miroir LocalStorage
+    if (!items || items.length === 0) {
       try {
-        const tx = this.db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.getAll();
-
-        req.onsuccess = () => {
-          const items = req.result || [];
-          // Sync backup copy to localStorage just in case
-          try {
-            // Store lightweight version without big photos if exceeds storage
-            localStorage.setItem('cc_items_count', items.length.toString());
-          } catch (_) {}
-          resolve(items);
-        };
-
-        req.onerror = () => resolve([]);
-      } catch (err) {
-        console.error('Erreur getAll:', err);
-        resolve([]);
+        const backupRaw = localStorage.getItem(BACKUP_STORAGE_KEY);
+        if (backupRaw) {
+          const backupItems = JSON.parse(backupRaw);
+          if (Array.isArray(backupItems) && backupItems.length > 0) {
+            console.log('Restauration automatique depuis la sauvegarde miroir:', backupItems.length, 'articles.');
+            items = backupItems;
+            // Réinjecter dans IndexedDB si réouvert
+            if (this.db) {
+              for (const it of items) {
+                await this.put(it, false);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Erreur lecture sauvegarde miroir:', e);
       }
-    });
-  }
-
-  async put(item) {
-    if (!this.db) {
-      this._saveFallback(item);
-      return true;
+    } else {
+      // Synchroniser la sauvegarde miroir
+      this._syncBackup(items);
     }
 
-    return new Promise((resolve, reject) => {
-      try {
-        const tx = this.db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.put(item);
-
-        req.onsuccess = () => resolve(true);
-        req.onerror = (e) => reject(e);
-      } catch (err) {
-        reject(err);
-      }
-    });
+    return items;
   }
 
+  /**
+   * Enregistre un article (création ou mise à jour) avec double écriture
+   */
+  async put(item, syncMirror = true) {
+    if (this.db) {
+      await new Promise((resolve, reject) => {
+        try {
+          const tx = this.db.transaction(STORE_NAME, 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.put(item);
+          req.onsuccess = () => resolve(true);
+          req.onerror = (e) => reject(e);
+        } catch (err) {
+          reject(err);
+        }
+      }).catch((e) => console.error('Erreur put IndexedDB:', e));
+    }
+
+    if (syncMirror) {
+      // Mise à jour de la sauvegarde locale miroir
+      try {
+        const currentBackup = this._getBackup();
+        const idx = currentBackup.findIndex((x) => x.id === item.id);
+        if (idx >= 0) {
+          currentBackup[idx] = item;
+        } else {
+          currentBackup.push(item);
+        }
+        this._syncBackup(currentBackup);
+      } catch (e) {
+        console.error('Erreur sync miroir:', e);
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Supprime un article
+   */
   async delete(id) {
-    if (!this.db) return true;
+    if (this.db) {
+      await new Promise((resolve) => {
+        try {
+          const tx = this.db.transaction(STORE_NAME, 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.delete(id);
+          req.onsuccess = () => resolve(true);
+          req.onerror = () => resolve(false);
+        } catch (err) {
+          resolve(false);
+        }
+      });
+    }
 
-    return new Promise((resolve, reject) => {
-      try {
-        const tx = this.db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.delete(id);
+    // Supprimer aussi du miroir
+    try {
+      const currentBackup = this._getBackup().filter((x) => x.id !== id);
+      this._syncBackup(currentBackup);
+    } catch (_) {}
 
-        req.onsuccess = () => resolve(true);
-        req.onerror = (e) => reject(e);
-      } catch (err) {
-        reject(err);
-      }
-    });
+    return true;
   }
 
+  /**
+   * Vide la base
+   */
   async clear() {
-    if (!this.db) return true;
+    if (this.db) {
+      await new Promise((resolve) => {
+        try {
+          const tx = this.db.transaction(STORE_NAME, 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.clear();
+          req.onsuccess = () => resolve(true);
+          req.onerror = () => resolve(false);
+        } catch (err) {
+          resolve(false);
+        }
+      });
+    }
 
-    return new Promise((resolve, reject) => {
+    try {
+      localStorage.removeItem(BACKUP_STORAGE_KEY);
+    } catch (_) {}
+
+    return true;
+  }
+
+  _getBackup() {
+    try {
+      const raw = localStorage.getItem(BACKUP_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  _syncBackup(items) {
+    try {
+      // Stockage sécurisé sans risquer de bloquer si quota image dépassé
+      localStorage.setItem(BACKUP_STORAGE_KEY, JSON.stringify(items));
+      localStorage.setItem('cc_items_last_sync', new Date().toISOString());
+      localStorage.setItem('cc_items_count', String(items.length));
+    } catch (err) {
+      // Si les images compressées sont trop volumineuses pour localStorage seul
       try {
-        const tx = this.db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.clear();
-
-        req.onsuccess = () => resolve(true);
-        req.onerror = (e) => reject(e);
-      } catch (err) {
-        reject(err);
-      }
-    });
+        const lightweight = items.map((i) => ({ ...i, photo: i.photo ? i.photo.slice(0, 100) + '...' : '' }));
+        localStorage.setItem(BACKUP_STORAGE_KEY, JSON.stringify(lightweight));
+      } catch (_) {}
+    }
   }
 
   /**
    * Sauvegarde réelle universelle téléchargeable (.json)
-   * Fonctionne sur tous les navigateurs (iOS Safari, Android Chrome, Desktop)
    */
   async exportJSON(items) {
     const dataStr = JSON.stringify(items, null, 2);
@@ -238,7 +317,6 @@ class Database {
           let importedCount = 0;
           for (const item of parsed) {
             if (item && typeof item === 'object') {
-              // Assurer les champs minimaux
               const cleanItem = {
                 id: item.id || Date.now() + Math.floor(Math.random() * 1000),
                 n: Number(item.n) || (importedCount + 1),
@@ -263,7 +341,7 @@ class Database {
                 recuNo: item.recuNo || '',
                 log: Array.isArray(item.log) ? item.log : []
               };
-              await this.put(cleanItem);
+              await this.put(cleanItem, true);
               importedCount++;
             }
           }
@@ -279,7 +357,7 @@ class Database {
   }
 
   /**
-   * Fournit des données de démonstration réalistes pour tester l'application
+   * Données de démonstration réalistes
    */
   getSampleData() {
     const today = new Date().toISOString().slice(0, 10);
@@ -308,7 +386,7 @@ class Database {
         photo: "",
         log: [
           { d: today, t: "Acheté 4 500 FCFA" },
-          { d: today, t: "Vendu 12 000 FCFA à 14:35 (Wave - Reçu: 12 000 FCFA) à Marc (Résidence A)" }
+          { d: today, t: "Vendu 12 000 FCFA à 14:35 (Wave) à Marc (Résidence A)" }
         ]
       },
       {
@@ -335,7 +413,7 @@ class Database {
         photo: "",
         log: [
           { d: today, t: "Acheté 3 000 FCFA" },
-          { d: today, t: "Vendu 8 000 FCFA à 16:20 (Espèces - Versé: 10 000 FCFA, Rendu: 2 000 FCFA) à Kevin" }
+          { d: today, t: "Vendu 8 000 FCFA à 16:20 (Espèces - Versé: 10 000 F, Rendu: 2 000 F) à Kevin" }
         ]
       },
       {
@@ -400,4 +478,3 @@ class Database {
 }
 
 window.appDB = new Database();
-

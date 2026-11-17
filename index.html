@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
   
   <title>Campus Corner - Gestion de Stock, Ventes & Bénéfices</title>
-  <meta name="description" content="Application moderne pour gérer vos drops de vêtements, stocks et bénéfices en FCFA sur le campus.">
+  <meta name="description" content="Plateforme professionnelle de gestion de stock, ventes, drops et suivi des bénéfices en FCFA.">
   
   <!-- Thème & Couleur navigateur -->
-  <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1e40af" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#090d16" media="(prefers-color-scheme: dark)">
 
-  <!-- PWA & iOS App configuration -->
+  <!-- PWA & Mobile Configuration -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -22,9 +22,9 @@
   <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
   <link rel="apple-touch-icon" href="assets/icon.svg">
 
-  <!-- OpenGraph Social Tags -->
-  <meta property="og:title" content="Campus Corner - Stock & Ventes">
-  <meta property="og:description" content="Gestion de friperie, drops de vêtements et suivi des bénéfices en FCFA.">
+  <!-- OpenGraph -->
+  <meta property="og:title" content="Campus Corner - Gestion de Stock & Ventes">
+  <meta property="og:description" content="Plateforme ultra-professionnelle de gestion de stock et bénéfices en FCFA.">
   <meta property="og:type" content="website">
   <meta property="og:image" content="assets/icon.svg">
 
@@ -33,58 +33,118 @@
 </head>
 <body>
 
-  <!-- Alerte Mode Hors-ligne -->
-  <div id="offline-banner" class="offline-banner"></div>
+  <!-- ÉCRAN DE VERROUILLAGE SÉCURISÉ (PIN pin2026) -->
+  <div id="lock-screen" class="lock-screen-wrapper">
+    <div class="lock-card">
+      <div class="lock-logo-wrapper">
+        <img src="assets/icon.svg" alt="Campus Corner Logo" class="lock-logo">
+      </div>
+      <h1 class="lock-title">CAMPUS <span>CORNER</span></h1>
+      <p class="lock-subtitle">Plateforme Privée de Gestion de Stock & Ventes</p>
+      
+      <form id="lock-form" class="lock-form">
+        <div class="lock-input-group">
+          <label for="lock-pin-input" class="lock-label">Code d'accès PIN</label>
+          <input 
+            type="password" 
+            id="lock-pin-input" 
+            class="lock-input" 
+            placeholder="Entrez votre code" 
+            autocomplete="current-password"
+            autofocus
+            required
+          >
+        </div>
 
-  <!-- En-tête de l'application -->
-  <header class="app-header">
-    <div class="header-inner">
-      <div class="brand">
-        <img src="assets/icon.svg" alt="Logo" class="brand-logo">
-        <div class="brand-text">
-          <h1>CAMPUS <span>CORNER</span></h1>
-          <div class="brand-tagline">Stock, Ventes & Bénéfices</div>
+        <button type="submit" class="btn btn-primary lock-submit-btn" id="btn-unlock-app">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+          Déverrouiller la Plateforme
+        </button>
+
+        <div class="lock-remember-row">
+          <label class="remember-label">
+            <input type="checkbox" id="lock-remember-check" checked>
+            <span>Mémoriser ma session sur cet appareil</span>
+          </label>
+        </div>
+      </form>
+
+      <div class="lock-footer">
+        <div class="lock-badge-security">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Données privées sauvegardées localement
         </div>
       </div>
-      <div class="header-actions">
-        <button id="theme-toggle" class="icon-btn" aria-label="Changer le thème">
-          <!-- Icône injectée dynamiquement -->
+    </div>
+  </div>
+
+  <!-- APPLICATION PRINCIPALE (Affichée après déverrouillage) -->
+  <div id="app-root" class="app-root hide">
+    
+    <!-- Alerte Mode Hors-ligne -->
+    <div id="offline-banner" class="offline-banner"></div>
+
+    <!-- En-tête Principal de l'Application -->
+    <header class="app-header">
+      <div class="header-inner">
+        <div class="brand">
+          <img src="assets/icon.svg" alt="Logo" class="brand-logo">
+          <div class="brand-text">
+            <h1>CAMPUS <span>CORNER</span></h1>
+            <div class="brand-tagline">Stock, Ventes & Bénéfices</div>
+          </div>
+        </div>
+        
+        <div class="header-actions">
+          <!-- Indicateur de sauvegarde automatique -->
+          <div class="sync-indicator" title="Toutes vos données sont synchronisées localement">
+            <span class="sync-dot"></span>
+            <span class="sync-text">Sécurisé</span>
+          </div>
+
+          <!-- Bascule Thème Clair / Sombre -->
+          <button id="theme-toggle" class="icon-btn" aria-label="Changer le thème"></button>
+
+          <!-- Bouton Verrouiller -->
+          <button id="btn-lock-session" class="icon-btn" title="Verrouiller la session">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Contenu Principal Dynamique -->
+    <main id="app" class="container"></main>
+
+    <!-- Navigation Principale (Mobile Bas, Desktop Haut) -->
+    <nav class="bottom-nav">
+      <div class="nav-inner">
+        <button class="nav-item active" data-view="stock">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+          <span>Stock</span>
+        </button>
+
+        <button class="nav-item" data-view="add">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          <span>Ajouter</span>
+        </button>
+
+        <button class="nav-item" data-view="bilan">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+          <span>Bilan</span>
+        </button>
+
+        <button class="nav-item" data-view="settings">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>Options</span>
         </button>
       </div>
+    </nav>
+
+    <!-- Bottom Sheet / Modal Overlay Générale -->
+    <div id="sheet" class="sheet-overlay">
+      <div id="sheet-content" class="sheet-content"></div>
     </div>
-  </header>
-
-  <!-- Contenu Principal Dynamique -->
-  <main id="app" class="container"></main>
-
-  <!-- Navigation Principale (Bas sur mobile, Haut sur Desktop) -->
-  <nav class="bottom-nav">
-    <div class="nav-inner">
-      <button class="nav-item active" data-view="stock">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
-        <span>Stock</span>
-      </button>
-
-      <button class="nav-item" data-view="add">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-        <span>Ajouter</span>
-      </button>
-
-      <button class="nav-item" data-view="bilan">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
-        <span>Bilan</span>
-      </button>
-
-      <button class="nav-item" data-view="settings">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-        <span>Options</span>
-      </button>
-    </div>
-  </nav>
-
-  <!-- Bottom Sheet / Modal Overlay -->
-  <div id="sheet" class="sheet-overlay">
-    <div id="sheet-content" class="sheet-content"></div>
   </div>
 
   <!-- Scripts -->

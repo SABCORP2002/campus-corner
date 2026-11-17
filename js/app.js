@@ -20,6 +20,11 @@
     activeSheetItem: null
   };
 
+  // Constantes de Sécurité & Clés
+  const APP_PIN = 'pin2026';
+  const PIN_STORAGE_KEY = 'cc_auth';
+  const PIN_REMEMBER_KEY = 'cc_remember_pin';
+
   // Sélecteur DOM rapide
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => document.querySelectorAll(selector);
@@ -29,12 +34,21 @@
     initTheme();
     initServiceWorker();
     initNetworkStatus();
+    initAuth();
     initNavigation();
     initGlobalEvents();
 
     try {
       await window.appDB.init();
-      state.items = await window.appDB.getAll();
+      let storedItems = await window.appDB.getAll();
+      if ((!storedItems || storedItems.length === 0) && !localStorage.getItem('cc_was_cleared')) {
+        const samples = window.appDB.getSampleData();
+        for (const it of samples) {
+          await window.appDB.put(it, true);
+        }
+        storedItems = await window.appDB.getAll();
+      }
+      state.items = storedItems;
     } catch (e) {
       console.error('Erreur chargement DB:', e);
       window.toast.error('Erreur d\'accès au stockage local.');
@@ -42,6 +56,93 @@
 
     render();
   });
+
+  // Gestion de la Sécurité & Authentification PIN (pin2026)
+  function checkAuth() {
+    const sessionAuth = sessionStorage.getItem(PIN_STORAGE_KEY);
+    const rememberedAuth = localStorage.getItem(PIN_REMEMBER_KEY);
+    return sessionAuth === APP_PIN || rememberedAuth === APP_PIN;
+  }
+
+  function unlockApp(notify = false) {
+    const lockScreen = $('#lock-screen');
+    const appRoot = $('#app-root');
+    if (lockScreen) lockScreen.classList.add('hide');
+    if (appRoot) appRoot.classList.remove('hide');
+    
+    const pinInput = $('#lock-pin-input');
+    if (pinInput) pinInput.value = '';
+
+    if (notify) {
+      window.toast.success('Plateforme déverrouillée avec succès !');
+    }
+  }
+
+  function lockApp(notify = false) {
+    const lockScreen = $('#lock-screen');
+    const appRoot = $('#app-root');
+    if (appRoot) appRoot.classList.add('hide');
+    if (lockScreen) lockScreen.classList.remove('hide');
+
+    const pinInput = $('#lock-pin-input');
+    if (pinInput) {
+      pinInput.value = '';
+      setTimeout(() => pinInput.focus(), 150);
+    }
+
+    if (notify) {
+      window.toast.info('Plateforme verrouillée.');
+    }
+  }
+
+  function initAuth() {
+    const lockForm = $('#lock-form');
+    const pinInput = $('#lock-pin-input');
+    const rememberCheck = $('#lock-remember-check');
+    const lockBtn = $('#btn-lock-session');
+
+    // Vérifier l'état initial
+    if (checkAuth()) {
+      unlockApp(false);
+    } else {
+      lockApp(false);
+    }
+
+    // Gestion du formulaire de déverrouillage
+    if (lockForm) {
+      lockForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const entered = (pinInput ? pinInput.value : '').trim();
+
+        if (entered === APP_PIN) {
+          sessionStorage.setItem(PIN_STORAGE_KEY, APP_PIN);
+          if (rememberCheck && rememberCheck.checked) {
+            localStorage.setItem(PIN_REMEMBER_KEY, APP_PIN);
+          } else {
+            localStorage.removeItem(PIN_REMEMBER_KEY);
+          }
+          unlockApp(true);
+        } else {
+          if (pinInput) {
+            pinInput.classList.remove('shake');
+            void pinInput.offsetWidth; // Déclencher reflow
+            pinInput.classList.add('shake');
+            pinInput.select();
+          }
+          window.toast.error('Code PIN invalide. Le code est pin2026.');
+        }
+      });
+    }
+
+    // Bouton de verrouillage dans l'en-tête
+    if (lockBtn) {
+      lockBtn.addEventListener('click', () => {
+        sessionStorage.removeItem(PIN_STORAGE_KEY);
+        localStorage.removeItem(PIN_REMEMBER_KEY);
+        lockApp(true);
+      });
+    }
+  }
 
   // Gestion du Thème (Sombre / Clair)
   function initTheme() {
@@ -907,6 +1008,20 @@
         </div>
       </div>
 
+      <div class="section-title">Sécurité & Accès</div>
+      <div class="settings-group">
+        <div class="settings-item" id="btn-settings-lock">
+          <div class="settings-info">
+            <div class="settings-icon">${getIcon('lock')}</div>
+            <div>
+              <div class="settings-title">Verrouiller la plateforme</div>
+              <div class="settings-desc">Code PIN configuré : <code>pin2026</code>. Nécessite le code pour réaccéder.</div>
+            </div>
+          </div>
+          <div>${getIcon('arrowUpRight')}</div>
+        </div>
+      </div>
+
       <div class="section-title">Sauvegarde & Restauration</div>
       <div class="settings-group">
         <div class="settings-item" id="btn-export-json">
@@ -977,6 +1092,15 @@
   }
 
   function bindSettingsEvents() {
+    const settingsLockBtn = $('#btn-settings-lock');
+    if (settingsLockBtn) {
+      settingsLockBtn.addEventListener('click', () => {
+        sessionStorage.removeItem(PIN_STORAGE_KEY);
+        localStorage.removeItem(PIN_REMEMBER_KEY);
+        lockApp(true);
+      });
+    }
+
     const themeBtn = $('#btn-toggle-theme-setting');
     if (themeBtn) {
       themeBtn.addEventListener('click', () => {
@@ -1046,9 +1170,10 @@
     const sampleBtn = $('#btn-load-sample');
     if (sampleBtn) {
       sampleBtn.addEventListener('click', async () => {
+        localStorage.removeItem('cc_was_cleared');
         const samples = window.appDB.getSampleData();
         for (const it of samples) {
-          await window.appDB.put(it);
+          await window.appDB.put(it, true);
         }
         state.items = await window.appDB.getAll();
         window.toast.success('Données de démo chargées !');
@@ -1069,6 +1194,7 @@
 
         if (confirmed) {
           await window.appDB.clear();
+          localStorage.setItem('cc_was_cleared', '1');
           state.items = [];
           window.toast.info('Base de données réinitialisée.');
           render();
