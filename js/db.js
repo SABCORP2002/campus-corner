@@ -171,7 +171,13 @@ class Database {
       'Bénéfice Réalisé (FCFA)',
       'Date Achat',
       'Date Vente',
-      'Client / Notes'
+      'Heure Vente',
+      'Mode Paiement',
+      'Montant Encaissé (FCFA)',
+      'Monnaie Rendue (FCFA)',
+      'Client',
+      'Téléphone Client',
+      'N° Reçu'
     ];
 
     const rows = items.map((i) => {
@@ -189,7 +195,13 @@ class Database {
         i.vendu ? benefice : '',
         i.dateAchat || '',
         i.dateVente || '',
-        `"${(i.client || '').replace(/"/g, '""')}"`
+        i.heureVente || '',
+        `"${(i.modePaiement || '').replace(/"/g, '""')}"`,
+        i.vendu ? (i.montantRecu != null ? i.montantRecu : i.prixVente || 0) : '',
+        i.vendu ? (i.monnaieRendue || 0) : '',
+        `"${(i.client || '').replace(/"/g, '""')}"`,
+        `"${(i.clientTel || '').replace(/"/g, '""')}"`,
+        `"${(i.recuNo || '').replace(/"/g, '""')}"`
       ].join(';');
     });
 
@@ -241,7 +253,14 @@ class Database {
                 vendu: Boolean(item.vendu),
                 prixVente: Number(item.prixVente) || 0,
                 dateVente: item.dateVente || '',
+                heureVente: item.heureVente || '',
+                modePaiement: item.modePaiement || '',
+                montantRecu: item.montantRecu != null ? Number(item.montantRecu) : 0,
+                monnaieRendue: item.monnaieRendue != null ? Number(item.monnaieRendue) : 0,
+                resteDu: item.resteDu != null ? Number(item.resteDu) : 0,
                 client: item.client || '',
+                clientTel: item.clientTel || '',
+                recuNo: item.recuNo || '',
                 log: Array.isArray(item.log) ? item.log : []
               };
               await this.put(cleanItem);
@@ -278,11 +297,18 @@ class Database {
         prixVente: 12000,
         dateAchat: today,
         dateVente: today,
+        heureVente: "14:35",
+        modePaiement: "Wave",
+        montantRecu: 12000,
+        monnaieRendue: 0,
+        resteDu: 0,
         client: "Marc (Résidence A)",
+        clientTel: "+225 07 48 92 11 05",
+        recuNo: "REC-" + today.replace(/-/g, '') + "-001",
         photo: "",
         log: [
           { d: today, t: "Acheté 4 500 FCFA" },
-          { d: today, t: "Vendu 12 000 FCFA à Marc (Résidence A)" }
+          { d: today, t: "Vendu 12 000 FCFA à 14:35 (Wave - Reçu: 12 000 FCFA) à Marc (Résidence A)" }
         ]
       },
       {
@@ -298,11 +324,18 @@ class Database {
         prixVente: 8000,
         dateAchat: today,
         dateVente: today,
+        heureVente: "16:20",
+        modePaiement: "Espèces",
+        montantRecu: 10000,
+        monnaieRendue: 2000,
+        resteDu: 0,
         client: "Kevin",
+        clientTel: "+225 05 12 34 56 78",
+        recuNo: "REC-" + today.replace(/-/g, '') + "-002",
         photo: "",
         log: [
           { d: today, t: "Acheté 3 000 FCFA" },
-          { d: today, t: "Vendu 8 000 FCFA" }
+          { d: today, t: "Vendu 8 000 FCFA à 16:20 (Espèces - Versé: 10 000 FCFA, Rendu: 2 000 FCFA) à Kevin" }
         ]
       },
       {
@@ -367,3 +400,4 @@ class Database {
 }
 
 window.appDB = new Database();
+

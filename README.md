@@ -35,7 +35,10 @@
 | **Modification des pièces** | Impossible de corriger une faute ou un prix sans supprimer | **Édition complète** de toutes les pièces à tout moment |
 | **Sauvegarde des données** | Bugué (`claude.use("downloads")` ne marchait pas dans les vrais navigateurs) | **Export JSON universel** en 1 clic + **Restauration** (avec option fusion ou écrasement) |
 | **Comptabilité / Excel** | Aucun export tableur | **Export CSV complet** prêt pour Excel ou Google Sheets |
-| **Expérience Client** | Aucune | **Génération et partage de reçu / ticket de vente** en un clic vers WhatsApp ou SMS |
+| **Terminal de Vente (POS)** | Date uniquement | **Date, Heure précise, Montant reçu, Calcul automatique de la Monnaie à rendre et Acomptes** |
+| **Moyens de Paiement** | Non gérés | **Espèces, Wave, Orange Money, Moov/MTN MoMo, Virement / Carte bancaire** avec statistiques dédiées |
+| **Ticket de Caisse / Reçu** | Aucun | **Génération de vrai ticket thermique**, impression directe PDF et partage en 1 clic sur WhatsApp |
+| **Expérience Client** | Aucune | Fiche client avec coordonnées, numéro WhatsApp et historique détaillé des règlements |
 | **Alertes & Modales** | `alert()` et `confirm()` natifs bloquants du navigateur | **Toasts non intrusifs** et **boîtes de dialogue modales élégantes** |
 | **PWA & Hors-ligne** | Pas de manifest ni service worker | **PWA complète** (`manifest.webmanifest` + `sw.js`), 100% utilisable hors connexion sur iPhone et Android |
 
@@ -112,3 +115,4 @@ Une fois déployé sur votre URL Vercel :
 ## 🔒 6. Confidentialité et Données
 
 Toutes vos données (photos, articles, prix, bénéfices) sont enregistrées **exclusivement dans le stockage local de votre navigateur (IndexedDB)**. Aucune donnée sensible n'est transmise à un serveur tiers. Pensez à utiliser le bouton **« Télécharger une sauvegarde JSON »** dans l'onglet **Options** régulièrement pour garder une copie de sécurité de vos comptes.
+

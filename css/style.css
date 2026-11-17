@@ -1051,3 +1051,310 @@ main.container {
 .offline-banner.active {
   display: block;
 }
+
+/* ==========================================================================
+   Point of Sale (POS), Vente Pro & Ticket de Caisse
+   ========================================================================== */
+.pos-box {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.pos-title {
+  font-size: 14px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: var(--tx);
+}
+
+.pos-methods-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.pos-method-chip {
+  padding: 8px 6px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--tx-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pos-method-chip:hover {
+  border-color: var(--primary);
+  color: var(--tx);
+}
+
+.pos-method-chip.active {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.quick-cash-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.quick-cash-chip {
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--tx-muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.quick-cash-chip:hover {
+  background: var(--primary-light);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.pos-calc-card {
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  margin-top: 10px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.2s ease;
+}
+
+.pos-calc-change {
+  background: var(--success-bg);
+  border: 1px solid var(--success);
+  color: var(--success-text);
+}
+
+.pos-calc-exact {
+  background: var(--primary-light);
+  border: 1px solid var(--primary);
+  color: var(--primary);
+}
+
+.pos-calc-due {
+  background: var(--warning-bg);
+  border: 1px solid var(--warning);
+  color: var(--warning-text);
+}
+
+/* Receipt Modal & Ticket de Caisse */
+.receipt-modal-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  width: 100%;
+  max-width: 380px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+}
+
+.receipt-paper {
+  background: #ffffff;
+  color: #1e293b;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px 16px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace, sans-serif;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  margin-bottom: 16px;
+}
+
+[data-theme="dark"] .receipt-paper {
+  background: #0f172a;
+  color: #f1f5f9;
+  border-color: #334155;
+}
+
+.receipt-header {
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.receipt-logo {
+  display: inline-flex;
+  margin-bottom: 4px;
+}
+
+.receipt-store-name {
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.receipt-tagline {
+  font-size: 10px;
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.receipt-doc-title {
+  font-size: 11px;
+  font-weight: 700;
+  border-top: 1px dashed currentColor;
+  border-bottom: 1px dashed currentColor;
+  padding: 4px 0;
+  margin: 6px 0;
+  letter-spacing: 0.08em;
+}
+
+.receipt-number {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.receipt-meta-grid {
+  font-size: 11px;
+  margin: 10px 0;
+  line-height: 1.5;
+}
+
+.receipt-meta-label {
+  opacity: 0.7;
+}
+
+.receipt-divider {
+  border-bottom: 1px dashed rgba(100, 116, 139, 0.3);
+  margin: 10px 0;
+}
+
+.receipt-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.receipt-item-name {
+  flex: 1;
+  padding-right: 8px;
+}
+
+.receipt-item-sub {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.receipt-item-price {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.receipt-calc-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin: 4px 0;
+}
+
+.receipt-total-row {
+  font-size: 14px;
+  font-weight: 800;
+  padding: 6px 0;
+  border-top: 1px solid rgba(100, 116, 139, 0.3);
+  border-bottom: 1px solid rgba(100, 116, 139, 0.3);
+  margin: 8px 0;
+}
+
+.receipt-big-total {
+  font-size: 16px;
+}
+
+.receipt-change-row {
+  font-weight: 700;
+}
+
+.receipt-footer {
+  text-align: center;
+  font-size: 11px;
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(100, 116, 139, 0.3);
+}
+
+.receipt-barcode {
+  letter-spacing: 6px;
+  font-size: 14px;
+  opacity: 0.4;
+  margin-bottom: 6px;
+}
+
+.receipt-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* Impression Ticket Thermique */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #receipt-modal-backdrop {
+    position: absolute;
+    left: 0;
+    top: 0;
+    background: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    visibility: visible;
+  }
+  #receipt-modal-card {
+    border: none !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    visibility: visible;
+  }
+  #receipt-print-area, #receipt-print-area * {
+    visibility: visible;
+  }
+  #receipt-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 320px;
+    margin: 0 auto;
+    border: none !important;
+    box-shadow: none !important;
+    color: #000 !important;
+    background: #fff !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+
