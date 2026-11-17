@@ -82,7 +82,6 @@ class Database {
         if (backupRaw) {
           const backupItems = JSON.parse(backupRaw);
           if (Array.isArray(backupItems) && backupItems.length > 0) {
-            console.log('Restauration automatique depuis la sauvegarde miroir:', backupItems.length, 'articles.');
             items = backupItems;
             // Réinjecter dans IndexedDB si réouvert
             if (this.db) {
@@ -95,6 +94,22 @@ class Database {
       } catch (e) {
         console.error('Erreur lecture sauvegarde miroir:', e);
       }
+    }
+
+    // Purge absolue de toute ancienne donnée de démonstration
+    const demoIds = new Set([1730000001, 1730000002, 1730000003, 1730000004, 1730000005]);
+    const hadDemo = items.some((it) => demoIds.has(it.id));
+    if (hadDemo) {
+      items = items.filter((it) => !demoIds.has(it.id));
+      if (this.db) {
+        for (const did of demoIds) {
+          try {
+            const tx = this.db.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).delete(did);
+          } catch (_) {}
+        }
+      }
+      this._syncBackup(items);
     } else {
       // Synchroniser la sauvegarde miroir
       this._syncBackup(items);
@@ -357,123 +372,10 @@ class Database {
   }
 
   /**
-   * Données de démonstration réalistes
+   * Aucune donnée de démonstration - Base vierge prête pour l'exploitation
    */
   getSampleData() {
-    const today = new Date().toISOString().slice(0, 10);
-    return [
-      {
-        id: 1730000001,
-        n: 1,
-        nom: "Veste en Jean Vintage Oversize",
-        drop: "Drop Denim & Vestes",
-        categorie: "Vestes",
-        taille: "L",
-        achat: 4500,
-        prevu: 12000,
-        vendu: true,
-        prixVente: 12000,
-        dateAchat: today,
-        dateVente: today,
-        heureVente: "14:35",
-        modePaiement: "Wave",
-        montantRecu: 12000,
-        monnaieRendue: 0,
-        resteDu: 0,
-        client: "Marc (Résidence A)",
-        clientTel: "+225 07 48 92 11 05",
-        recuNo: "REC-" + today.replace(/-/g, '') + "-001",
-        photo: "",
-        log: [
-          { d: today, t: "Acheté 4 500 FCFA" },
-          { d: today, t: "Vendu 12 000 FCFA à 14:35 (Wave) à Marc (Résidence A)" }
-        ]
-      },
-      {
-        id: 1730000002,
-        n: 2,
-        nom: "Pantalon Cargo Beige Militaire",
-        drop: "Drop Denim & Vestes",
-        categorie: "Bas",
-        taille: "32 (M)",
-        achat: 3000,
-        prevu: 8500,
-        vendu: true,
-        prixVente: 8000,
-        dateAchat: today,
-        dateVente: today,
-        heureVente: "16:20",
-        modePaiement: "Espèces",
-        montantRecu: 10000,
-        monnaieRendue: 2000,
-        resteDu: 0,
-        client: "Kevin",
-        clientTel: "+225 05 12 34 56 78",
-        recuNo: "REC-" + today.replace(/-/g, '') + "-002",
-        photo: "",
-        log: [
-          { d: today, t: "Acheté 3 000 FCFA" },
-          { d: today, t: "Vendu 8 000 FCFA à 16:20 (Espèces - Versé: 10 000 F, Rendu: 2 000 F) à Kevin" }
-        ]
-      },
-      {
-        id: 1730000003,
-        n: 3,
-        nom: "Sweat Capuche Streetwear Noir",
-        drop: "Drop Hoodies Hiver",
-        categorie: "Hauts",
-        taille: "XL",
-        achat: 4000,
-        prevu: 10000,
-        vendu: false,
-        prixVente: 0,
-        dateAchat: today,
-        dateVente: "",
-        client: "",
-        photo: "",
-        log: [
-          { d: today, t: "Acheté 4 000 FCFA" }
-        ]
-      },
-      {
-        id: 1730000004,
-        n: 4,
-        nom: "T-Shirt Graphique Anime 90s",
-        drop: "Drop Tees & Vintage",
-        categorie: "Hauts",
-        taille: "M",
-        achat: 2000,
-        prevu: 5500,
-        vendu: false,
-        prixVente: 0,
-        dateAchat: today,
-        dateVente: "",
-        client: "",
-        photo: "",
-        log: [
-          { d: today, t: "Acheté 2 000 FCFA" }
-        ]
-      },
-      {
-        id: 1730000005,
-        n: 5,
-        nom: "Sneakers Rétro Blanc & Vert",
-        drop: "Drop Kicks Campus",
-        categorie: "Chaussures",
-        taille: "43",
-        achat: 9000,
-        prevu: 22000,
-        vendu: false,
-        prixVente: 0,
-        dateAchat: today,
-        dateVente: "",
-        client: "",
-        photo: "",
-        log: [
-          { d: today, t: "Acheté 9 000 FCFA" }
-        ]
-      }
-    ];
+    return [];
   }
 }
 

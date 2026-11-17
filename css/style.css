@@ -410,8 +410,8 @@ main.container {
   max-width: 680px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 4px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
 }
 
 .nav-item {
@@ -1573,4 +1573,225 @@ main.container {
 }
 .offline-banner.active {
   display: block;
+}
+
+/* ==========================================================================
+   STATUS SELECTOR (EN STOCK VS DÉJÀ VENDU DANS L'AJOUT)
+   ========================================================================== */
+.status-selector-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  background: var(--bg-subtle);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.status-choice-btn {
+  border: none;
+  background: transparent;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tx-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.status-choice-btn.active {
+  background: var(--card);
+  color: var(--tx);
+  box-shadow: var(--shadow-sm);
+}
+
+.status-choice-btn.active[data-status="sold"] {
+  background: rgba(147, 51, 234, 0.12);
+  color: #9333ea;
+  border: 1px solid rgba(147, 51, 234, 0.3);
+}
+
+[data-theme="dark"] .status-choice-btn.active[data-status="sold"] {
+  background: rgba(168, 85, 247, 0.18);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+
+.status-choice-btn.active[data-status="stock"] {
+  background: var(--primary-light);
+  color: var(--primary);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+}
+
+/* ==========================================================================
+   SECTION VENTES (JOURNAL DES VENTES, CAISSE & HISTORIQUE)
+   ========================================================================== */
+.sales-hero-card {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(16, 185, 129, 0.08));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sales-hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.btn-action-pos {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #ffffff;
+  border: none;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 800;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  transition: all 0.2s ease;
+}
+
+.btn-action-pos:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+}
+
+.btn-action-pos svg {
+  stroke-width: 2.5;
+}
+
+.sales-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.sales-kpi-chip {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  text-align: center;
+}
+
+.sales-kpi-chip-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tx-muted);
+  font-weight: 700;
+}
+
+.sales-kpi-chip-val {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--tx);
+  margin-top: 2px;
+}
+
+.sales-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sale-item-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: all 0.2s ease;
+}
+
+.sale-item-card:hover {
+  border-color: rgba(37, 99, 235, 0.4);
+  box-shadow: var(--shadow-sm);
+}
+
+.sale-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.sale-item-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sale-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  object-fit: cover;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tx-muted);
+}
+
+.sale-badge-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary);
+  background: var(--primary-light);
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+}
+
+.sale-price-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+}
+
+.sale-price-val {
+  font-size: 17px;
+  font-weight: 900;
+  color: var(--tx);
+}
+
+.sale-profit-tag {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--success);
+}
+
+.sale-actions-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.sale-actions-row .btn {
+  flex: 1;
+  padding: 7px 10px;
+  font-size: 12px;
 }

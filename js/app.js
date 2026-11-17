@@ -8,12 +8,14 @@
   // État de l'application
   const state = {
     items: [],
-    view: 'stock',
+    view: 'stock', // 'stock' | 'sales' | 'add' | 'bilan' | 'settings'
     filter: 'dispo', // 'dispo' | 'vendu' | 'tous'
     dropFilter: '',
     categoryFilter: '',
     sortBy: 'recent', // 'recent' | 'price_desc' | 'price_asc' | 'margin_desc'
     searchQuery: '',
+    salesSearchQuery: '',
+    salesPeriodFilter: 'tout', // 'jour' | 'semaine' | 'mois' | 'tout'
     period: 'mois', // 'jour' | 'semaine' | 'mois' | 'annee' | 'tout'
     draftPhoto: '',
     editingItem: null,
@@ -29,7 +31,7 @@
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => document.querySelectorAll(selector);
 
-  // Initialisation au chargement
+  // Initialisation au chargement - ZÉRO DONNÉE DE DÉMO (Base propre et prête)
   window.addEventListener('DOMContentLoaded', async () => {
     initTheme();
     initServiceWorker();
@@ -40,15 +42,9 @@
 
     try {
       await window.appDB.init();
+      // Récupération directe sans injection de démo
       let storedItems = await window.appDB.getAll();
-      if ((!storedItems || storedItems.length === 0) && !localStorage.getItem('cc_was_cleared')) {
-        const samples = window.appDB.getSampleData();
-        for (const it of samples) {
-          await window.appDB.put(it, true);
-        }
-        storedItems = await window.appDB.getAll();
-      }
-      state.items = storedItems;
+      state.items = Array.isArray(storedItems) ? storedItems : [];
     } catch (e) {
       console.error('Erreur chargement DB:', e);
       window.toast.error('Erreur d\'accès au stockage local.');
@@ -271,6 +267,9 @@
     if (state.view === 'stock') {
       app.innerHTML = renderStockView();
       bindStockEvents();
+    } else if (state.view === 'sales') {
+      app.innerHTML = renderSalesView();
+      bindSalesEvents();
     } else if (state.view === 'add') {
       app.innerHTML = renderAddView();
       bindAddEvents();
@@ -434,10 +433,14 @@
                   ${isVendu ? fmt(item.prixVente) : fmt(item.prevu || item.achat)}
                 </span>
                 ${isVendu && item.dateVente ? `
-                  <div style="font-size:11px; color:var(--tx-muted); margin-top:1px;">
-                    ${esc(fdt(item.dateVente, item.heureVente))}
+                  <div style="font-size:11px; color:var(--primary); font-weight:700; margin-top:2px;">
+                    📅 Vendu le ${esc(fdt(item.dateVente, item.heureVente))}
                   </div>
-                ` : ''}
+                ` : `
+                  <div style="font-size:11px; color:var(--tx-muted); margin-top:2px;">
+                    Acheté le ${fd(item.dateAchat)}
+                  </div>
+                `}
               </div>
               <span style="font-size:11px; color:${margin >= 0 ? 'var(--success)' : 'var(--danger)'}; font-weight:600;">
                 ${isVendu ? 'Gain: ' : 'Marge prev: '} ${margin >= 0 ? '+' : ''}${fmt(margin)}
@@ -508,20 +511,683 @@
   }
 
   // ==========================================
-  // VUE 2 : AJOUTER / MODIFIER UN ARTICLE
+  // VUE 1.5 : JOURNAL DES VENTES & CAISSE
   // ==========================================
+  function renderSalesView() {
+    const allSold = state.items.filter((i) => i.vendu);
+
+    // Filtrage par période & recherche
+    let filtered = allSold.filter((item) => {
+      if (!inPeriod(item.dateVente, state.salesPeriodFilter)) return false;
+      if (state.salesSearchQuery) {
+        const q = state.salesSearchQuery.toLowerCase();
+        const refMatch = `#${item.n}`.toLowerCase().includes(q);
+        const nomMatch = (item.nom || '').toLowerCase().includes(q);
+        const dropMatch = getDropName(item).toLowerCase().includes(q);
+        const clientMatch = (item.client || '').toLowerCase().includes(q);
+        const phoneMatch = (item.clientTel || '').toLowerCase().includes(q);
+        const dateMatch = (item.dateVente || '').includes(q) || fd(item.dateVente).includes(q);
+        const modeMatch = (item.modePaiement || '').toLowerCase().includes(q);
+        if (!refMatch && !nomMatch && !dropMatch && !clientMatch && !phoneMatch && !dateMatch && !modeMatch) return false;
+      }
+      return true;
+    });
+
+    // Tri par date & heure de vente décroissantes (les plus récentes en premier)
+    filtered.sort((a, b) => {
+      const timeA = `${a.dateVente || ''} ${a.heureVente || '00:00'}`;
+      const timeB = `${b.dateVente || ''} ${b.heureVente || '00:00'}`;
+      return timeB.localeCompare(timeA) || (b.n || 0) - (a.n || 0);
+    });
+
+    // Calculs de synthèse
+    const totalSoldPeriod = filtered.length;
+    const totalRevenuePeriod = filtered.reduce((sum, i) => sum + (Number(i.prixVente) || 0), 0);
+    const totalProfitPeriod = filtered.reduce((sum, i) => sum + ((Number(i.prixVente) || 0) - (Number(i.achat) || 0)), 0);
+
+    const periods = [
+      { key: 'tout', label: `Toutes (${allSold.length})` },
+      { key: 'jour', label: 'Aujourd\'hui' },
+      { key: 'semaine', label: '7 jours' },
+      { key: 'mois', label: 'Ce mois' }
+    ];
+
+    let html = `
+      <div class="sales-hero-card">
+        <div class="sales-hero-top">
+          <div>
+            <h2 style="font-size:18px; font-weight:800; margin:0;">Journal des Ventes & Encaissements</h2>
+            <p style="font-size:12px; color:var(--tx-muted); margin:2px 0 0;">
+              Historique détaillé avec date, heure, mode de paiement et reçus
+            </p>
+          </div>
+          <button type="button" class="btn-action-pos" id="btn-sales-open-pos">
+            ${getIcon('receipt')} Encaisser une vente
+          </button>
+        </div>
+
+        <div class="sales-kpi-row">
+          <div class="sales-kpi-chip">
+            <div class="sales-kpi-chip-title">Ventes</div>
+            <div class="sales-kpi-chip-val">${totalSoldPeriod}</div>
+          </div>
+          <div class="sales-kpi-chip">
+            <div class="sales-kpi-chip-title">Encaissé</div>
+            <div class="sales-kpi-chip-val">${fmt(totalRevenuePeriod)}</div>
+          </div>
+          <div class="sales-kpi-chip">
+            <div class="sales-kpi-chip-title">Bénéfice net</div>
+            <div class="sales-kpi-chip-val" style="color:var(--success);">+${fmt(totalProfitPeriod)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="toolbar" style="margin-bottom:14px;">
+        <div class="search-box">
+          <span class="search-icon">${getIcon('search')}</span>
+          <input 
+            type="search" 
+            id="sales-search-input" 
+            class="search-input" 
+            placeholder="Rechercher par date, client, #réf, mode..." 
+            value="${esc(state.salesSearchQuery)}"
+          />
+          <button id="sales-search-clear" class="search-clear ${state.salesSearchQuery ? 'visible' : ''}">
+            ${getIcon('x')}
+          </button>
+        </div>
+
+        <div class="chips-scroll">
+          ${periods.map((p) => `
+            <button class="chip-btn ${state.salesPeriodFilter === p.key ? 'active' : ''}" data-sales-period="${p.key}">
+              ${p.label}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `;
+
+    if (!filtered.length) {
+      html += `
+        <div class="empty-state">
+          <div class="empty-icon">${getIcon('receipt')}</div>
+          <div class="empty-title">${allSold.length ? 'Aucune vente trouvée' : 'Aucune vente enregistrée'}</div>
+          <p class="empty-desc">
+            ${allSold.length 
+              ? 'Aucune vente ne correspond à vos filtres actuels.' 
+              : 'Toutes vos ventes terminées, leurs dates précises, heures et reçus apparaîtront ici.'}
+          </p>
+          <button class="btn btn-primary" id="btn-empty-sales-pos" style="max-width:240px; margin:0 auto;">
+            ${getIcon('plus')} Encaisser une vente
+          </button>
+        </div>
+      `;
+      return html;
+    }
+
+    html += `<div class="sales-list">`;
+    filtered.forEach((item) => {
+      const profit = (Number(item.prixVente) || 0) - (Number(item.achat) || 0);
+      const formattedDate = fdt(item.dateVente, item.heureVente) || 'Date non précisée';
+
+      html += `
+        <div class="sale-item-card" data-id="${item.id}">
+          <div class="sale-item-header">
+            <div class="sale-item-identity">
+              <div class="sale-thumb">
+                ${item.photo ? `<img src="${item.photo}" alt="${esc(item.nom)}" style="width:100%;height:100%;object-fit:cover;border-radius:var(--radius-sm);">` : getIcon('package')}
+              </div>
+              <div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span class="item-ref">#${item.n}</span>
+                  <span style="font-weight:700; font-size:14px; color:var(--tx);">${esc(item.nom)}</span>
+                </div>
+                <div style="font-size:12px; color:var(--tx-muted); margin-top:2px;">
+                  ${esc(getDropName(item))}${item.taille ? ' · T. ' + esc(item.taille) : ''}
+                </div>
+              </div>
+            </div>
+            
+            <span class="sale-badge-date">
+              ${getIcon('calendar')} ${esc(formattedDate)}
+            </span>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--tx-muted);">
+            <div>
+              <span class="badge-status" style="font-size:11px; padding:2px 8px; background:var(--bg-subtle);">
+                💳 ${esc(item.modePaiement || 'Espèces')}
+              </span>
+              ${item.client ? `<span style="margin-left:6px;">👤 <strong>${esc(item.client)}</strong>${item.clientTel ? ' (' + esc(item.clientTel) + ')' : ''}</span>` : ''}
+            </div>
+            ${item.recuNo ? `<span style="font-size:11px; font-family:monospace; opacity:0.8;">${esc(item.recuNo)}</span>` : ''}
+          </div>
+
+          <div class="sale-price-row">
+            <div>
+              <div style="font-size:10px; text-transform:uppercase; color:var(--tx-muted); font-weight:700;">Prix Vendu</div>
+              <div class="sale-price-val">${fmt(item.prixVente)}</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:10px; text-transform:uppercase; color:var(--tx-muted); font-weight:700;">Bénéfice Net</div>
+              <div class="sale-profit-tag">+${fmt(profit)}</div>
+            </div>
+          </div>
+
+          <div class="sale-actions-row">
+            <button type="button" class="btn btn-secondary" data-action="view-receipt" data-id="${item.id}">
+              ${getIcon('receipt')} Reçu
+            </button>
+            <button type="button" class="btn btn-secondary" data-action="edit-sale" data-id="${item.id}">
+              ${getIcon('edit')} Modifier
+            </button>
+            <button type="button" class="btn btn-secondary" data-action="unsell" data-id="${item.id}" title="Remettre en stock">
+              ${getIcon('rotateCcw')} En stock
+            </button>
+          </div>
+        </div>
+      `;
+    });
+    html += `</div>`;
+
+    return html;
+  }
+
+  function bindSalesEvents() {
+    const searchInput = $('#sales-search-input');
+    const searchClear = $('#sales-search-clear');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        state.salesSearchQuery = e.target.value;
+        if (searchClear) searchClear.classList.toggle('visible', !!state.salesSearchQuery);
+        render();
+      });
+    }
+
+    if (searchClear) {
+      searchClear.addEventListener('click', () => {
+        state.salesSearchQuery = '';
+        render();
+      });
+    }
+
+    $$('.chip-btn[data-sales-period]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.salesPeriodFilter = btn.dataset.salesPeriod;
+        render();
+      });
+    });
+
+    const openPosBtn = $('#btn-sales-open-pos');
+    if (openPosBtn) {
+      openPosBtn.addEventListener('click', () => openPosModal());
+    }
+
+    const emptyPosBtn = $('#btn-empty-sales-pos');
+    if (emptyPosBtn) {
+      emptyPosBtn.addEventListener('click', () => openPosModal());
+    }
+
+    // Actions sur chaque vente
+    $$('.sale-item-card button[data-action]').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        const id = Number(btn.dataset.id);
+        const item = state.items.find((i) => i.id === id);
+        if (!item) return;
+
+        if (action === 'view-receipt') {
+          showReceiptModal(item);
+        } else if (action === 'edit-sale') {
+          openEditSaleModal(item);
+        } else if (action === 'unsell') {
+          const confirmed = await confirmModal({
+            title: 'Remettre en stock ?',
+            message: `Voulez-vous annuler la vente de #${item.n} · ${item.nom} et la remettre dans le stock disponible ?`,
+            confirmText: 'Remettre en stock'
+          });
+
+          if (confirmed) {
+            item.vendu = false;
+            item.prixVente = 0;
+            item.dateVente = '';
+            item.heureVente = '';
+            item.modePaiement = '';
+            item.montantRecu = 0;
+            item.monnaieRendue = 0;
+            item.resteDu = 0;
+            if (!item.log) item.log = [];
+            item.log.push({ d: today(), t: 'Vente annulée, article remis en stock' });
+            await window.appDB.put(item);
+            window.toast.info('Article remis en stock disponible.');
+            render();
+          }
+        }
+      });
+    });
+  }
+
+  // ==========================================
+  // MODALE D'ENCAISSEMENT RAPIDE (POS)
+  // ==========================================
+  function openPosModal(preselectedItem = null) {
+    const availableItems = state.items.filter((i) => !i.vendu);
+
+    if (!availableItems.length && !preselectedItem) {
+      confirmModal({
+        title: 'Aucun article en stock',
+        message: 'Votre inventaire est vide ou toutes les pièces ont déjà été vendues. Voulez-vous enregistrer une nouvelle pièce ?',
+        confirmText: 'Ajouter un article',
+        cancelText: 'Fermer'
+      }).then((ok) => {
+        if (ok) switchView('add');
+      });
+      return;
+    }
+
+    const sheet = $('#sheet');
+    const sheetc = $('#sheet-content');
+    if (!sheet || !sheetc) return;
+
+    let selectedItem = preselectedItem || availableItems[0];
+    const defaultPrice = selectedItem ? (selectedItem.prevu || selectedItem.achat || 0) : 0;
+
+    let html = `
+      <div class="sheet-handle"></div>
+      
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h2 style="font-size:18px; font-weight:800; margin:0; display:flex; align-items:center; gap:8px;">
+          ${getIcon('receipt')} Encaisser une Vente
+        </h2>
+        <button type="button" class="photo-remove-btn" id="pos-close-modal" style="position:static;">
+          ${getIcon('x')}
+        </button>
+      </div>
+
+      <!-- Sélection de la pièce en stock -->
+      <div class="form-group">
+        <label class="form-label">Article vendu *</label>
+        ${preselectedItem ? `
+          <div style="background:var(--bg-subtle); padding:10px 14px; border-radius:var(--radius-md); border:1px solid var(--border); display:flex; align-items:center; gap:10px;">
+            <span class="item-ref">#${selectedItem.n}</span>
+            <div style="flex:1;">
+              <strong style="color:var(--tx);">${esc(selectedItem.nom)}</strong>
+              <div style="font-size:12px; color:var(--tx-muted);">${esc(getDropName(selectedItem))}${selectedItem.taille ? ' · T. ' + esc(selectedItem.taille) : ''}</div>
+            </div>
+            <span style="font-weight:800; color:var(--primary);">${fmt(selectedItem.prevu || selectedItem.achat)}</span>
+          </div>
+          <input type="hidden" id="pos-modal-item-id" value="${selectedItem.id}">
+        ` : `
+          <select id="pos-modal-item-id" class="form-select" style="font-size:14px; font-weight:600;">
+            ${availableItems.map((it) => `
+              <option value="${it.id}" ${it.id === selectedItem.id ? 'selected' : ''}>
+                #${it.n} · ${esc(it.nom)} (${esc(getDropName(it))}) — Prévu: ${fmt(it.prevu || it.achat)}
+              </option>
+            `).join('')}
+          </select>
+        `}
+      </div>
+
+      <!-- Date & Heure de la vente -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Date de vente *</label>
+          <input type="date" id="pos-modal-date" class="form-input" value="${today()}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Heure de vente</label>
+          <input type="time" id="pos-modal-time" class="form-input" value="${nowTime()}">
+        </div>
+      </div>
+
+      <!-- Prix vendu réel -->
+      <div class="form-group">
+        <label class="form-label">Prix Vendu Réel (FCFA) *</label>
+        <input 
+          type="number" 
+          id="pos-modal-price" 
+          class="form-input" 
+          inputmode="numeric" 
+          placeholder="Ex: 8000" 
+          value="${defaultPrice}"
+          style="font-size:17px; font-weight:800;"
+        >
+      </div>
+
+      <!-- Mode de règlement -->
+      <div class="form-group">
+        <label class="form-label">Mode de règlement</label>
+        <div class="pos-methods-grid" id="pos-modal-methods">
+          <div class="pos-method-chip active" data-mode="Espèces">💵 Espèces</div>
+          <div class="pos-method-chip" data-mode="Wave">🌊 Wave</div>
+          <div class="pos-method-chip" data-mode="Orange Money">🍊 OM</div>
+          <div class="pos-method-chip" data-mode="Moov / MTN">📱 MoMo</div>
+          <div class="pos-method-chip" data-mode="Virement / Carte">💳 Virement</div>
+          <div class="pos-method-chip" data-mode="Autre">🛍️ Autre</div>
+        </div>
+        <input type="hidden" id="pos-modal-mode" value="Espèces">
+      </div>
+
+      <!-- Montant reçu & Monnaie -->
+      <div class="form-group">
+        <label class="form-label">Montant reçu / versé par le client (FCFA)</label>
+        <input 
+          type="number" 
+          id="pos-modal-received" 
+          class="form-input" 
+          inputmode="numeric" 
+          placeholder="Montant donné" 
+          value="${defaultPrice}"
+          style="font-size:16px; font-weight:700;"
+        >
+        <div class="quick-cash-row">
+          <button type="button" class="quick-cash-chip" id="pos-modal-exact">Exact</button>
+          <button type="button" class="quick-cash-chip" data-val="5000">5 000 F</button>
+          <button type="button" class="quick-cash-chip" data-val="10000">10 000 F</button>
+          <button type="button" class="quick-cash-chip" data-val="20000">20 000 F</button>
+        </div>
+
+        <div id="pos-modal-calc-display" class="pos-calc-card pos-calc-exact">
+          <span>Règlement exact</span>
+          <strong>Monnaie : 0 FCFA</strong>
+        </div>
+      </div>
+
+      <!-- Acheteur -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Nom du client (optionnel)</label>
+          <input type="text" id="pos-modal-client" class="form-input" placeholder="Ex: Marc" value="${esc(selectedItem ? selectedItem.client : '')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Téléphone / WhatsApp</label>
+          <input type="tel" id="pos-modal-phone" class="form-input" placeholder="Ex: +225 07..." value="${esc(selectedItem && selectedItem.clientTel ? selectedItem.clientTel : '')}">
+        </div>
+      </div>
+
+      <button type="button" class="btn btn-success" id="btn-pos-modal-confirm" style="margin-top:14px;">
+        ${getIcon('check')} Confirmer l'Encaissement & Reçu
+      </button>
+
+      <button type="button" class="btn btn-secondary" id="btn-pos-modal-cancel" style="margin-top:8px;">
+        Annuler
+      </button>
+    `;
+
+    sheetc.innerHTML = html;
+    sheet.classList.add('active');
+
+    const closePos = () => sheet.classList.remove('active');
+    $('#pos-close-modal').onclick = closePos;
+    $('#btn-pos-modal-cancel').onclick = closePos;
+
+    const itemSelect = $('#pos-modal-item-id');
+    const priceInput = $('#pos-modal-price');
+    const receivedInput = $('#pos-modal-received');
+    const calcDisplay = $('#pos-modal-calc-display');
+
+    if (itemSelect && itemSelect.tagName === 'SELECT') {
+      itemSelect.addEventListener('change', () => {
+        const id = Number(itemSelect.value);
+        selectedItem = state.items.find((i) => i.id === id);
+        if (selectedItem) {
+          const val = selectedItem.prevu || selectedItem.achat || 0;
+          priceInput.value = val;
+          receivedInput.value = val;
+          if ($('#pos-modal-client')) $('#pos-modal-client').value = selectedItem.client || '';
+          updatePosCalc();
+        }
+      });
+    }
+
+    function updatePosCalc() {
+      const price = parseFloat(priceInput.value) || 0;
+      const received = parseFloat(receivedInput.value) || 0;
+
+      if (received > price && price > 0) {
+        const change = received - price;
+        calcDisplay.className = 'pos-calc-card pos-calc-change';
+        calcDisplay.innerHTML = `<span>Monnaie à rendre :</span><strong style="color:var(--success); font-size:15px;">+${fmt(change)}</strong>`;
+      } else if (received === price && price > 0) {
+        calcDisplay.className = 'pos-calc-card pos-calc-exact';
+        calcDisplay.innerHTML = `<span>Montant exact reçu</span><strong>Rendu : 0 FCFA</strong>`;
+      } else if (received < price && price > 0) {
+        const due = price - received;
+        calcDisplay.className = 'pos-calc-card pos-calc-due';
+        calcDisplay.innerHTML = `<span>Acompte / Partiel :</span><strong style="color:var(--warning-text, #b45309);">Reste dû : ${fmt(due)}</strong>`;
+      } else {
+        calcDisplay.className = 'pos-calc-card pos-calc-exact';
+        calcDisplay.innerHTML = `<span>Prêt à encaisser</span><strong>${fmt(price)}</strong>`;
+      }
+    }
+
+    priceInput.addEventListener('input', () => {
+      receivedInput.value = priceInput.value;
+      updatePosCalc();
+    });
+    receivedInput.addEventListener('input', updatePosCalc);
+
+    $('#pos-modal-exact').onclick = () => {
+      receivedInput.value = priceInput.value || 0;
+      updatePosCalc();
+    };
+
+    $$('.quick-cash-chip[data-val]').forEach((btn) => {
+      btn.onclick = () => {
+        receivedInput.value = btn.dataset.val;
+        updatePosCalc();
+      };
+    });
+
+    $$('#pos-modal-methods .pos-method-chip').forEach((chip) => {
+      chip.onclick = () => {
+        $$('#pos-modal-methods .pos-method-chip').forEach((c) => c.classList.remove('active'));
+        chip.classList.add('active');
+        $('#pos-modal-mode').value = chip.dataset.mode;
+      };
+    });
+
+    $('#btn-pos-modal-confirm').onclick = async () => {
+      const itemId = Number(itemSelect.value);
+      const targetItem = state.items.find((i) => i.id === itemId);
+      if (!targetItem) {
+        window.toast.error('Article introuvable');
+        return;
+      }
+
+      const price = parseFloat(priceInput.value);
+      const sellDate = $('#pos-modal-date').value || today();
+      const sellTime = $('#pos-modal-time').value || nowTime();
+      const modePaiement = $('#pos-modal-mode').value || 'Espèces';
+      const received = parseFloat(receivedInput.value);
+      const client = ($('#pos-modal-client').value || '').trim();
+      const clientTel = ($('#pos-modal-phone').value || '').trim();
+
+      if (isNaN(price) || price <= 0) {
+        window.toast.error('Veuillez indiquer un prix de vente valide.');
+        priceInput.focus();
+        return;
+      }
+
+      const montantRecu = isNaN(received) ? price : received;
+      const monnaieRendue = Math.max(0, montantRecu - price);
+      const resteDu = Math.max(0, price - montantRecu);
+      const recuNo = `REC-${sellDate.replace(/-/g, '')}-${String(targetItem.n).padStart(3, '0')}`;
+
+      targetItem.vendu = true;
+      targetItem.prixVente = price;
+      targetItem.dateVente = sellDate;
+      targetItem.heureVente = sellTime;
+      targetItem.modePaiement = modePaiement;
+      targetItem.montantRecu = montantRecu;
+      targetItem.monnaieRendue = monnaieRendue;
+      targetItem.resteDu = resteDu;
+      targetItem.recuNo = recuNo;
+      if (client) targetItem.client = client;
+      if (clientTel) targetItem.clientTel = clientTel;
+      if (!targetItem.log) targetItem.log = [];
+
+      targetItem.log.push({
+        d: sellDate,
+        t: `Vendu ${fmt(price)} le ${fd(sellDate)} à ${sellTime} (${modePaiement})${client ? ' à ' + client : ''}`
+      });
+
+      await window.appDB.put(targetItem);
+      window.toast.success(`Vente #${targetItem.n} enregistrée avec succès !`);
+      closePos();
+      render();
+      showReceiptModal(targetItem);
+    };
+  }
+
+  // ==========================================
+  // MODALE DE MODIFICATION D'UNE VENTE EXISTANTE
+  // ==========================================
+  function openEditSaleModal(item) {
+    const sheet = $('#sheet');
+    const sheetc = $('#sheet-content');
+    if (!sheet || !sheetc) return;
+
+    let html = `
+      <div class="sheet-handle"></div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h2 style="font-size:18px; font-weight:800; margin:0;">
+          Modifier la vente #${item.n}
+        </h2>
+        <button type="button" class="photo-remove-btn" id="edit-sale-close" style="position:static;">
+          ${getIcon('x')}
+        </button>
+      </div>
+
+      <div style="font-size:13px; color:var(--tx-muted); margin-bottom:14px;">
+        <strong>${esc(item.nom)}</strong> · ${esc(getDropName(item))}
+      </div>
+
+      <!-- Date de vente & Heure de vente -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Date de vente *</label>
+          <input type="date" id="edit-sale-date" class="form-input" value="${item.dateVente || today()}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Heure de vente</label>
+          <input type="time" id="edit-sale-time" class="form-input" value="${item.heureVente || nowTime()}">
+        </div>
+      </div>
+
+      <!-- Prix vendu & Mode -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Prix vendu réel (FCFA) *</label>
+          <input type="number" id="edit-sale-price" class="form-input" inputmode="numeric" value="${item.prixVente || ''}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Mode de règlement</label>
+          <select id="edit-sale-mode" class="form-select">
+            <option value="Espèces" ${(item.modePaiement||'Espèces')==='Espèces'?'selected':''}>💵 Espèces</option>
+            <option value="Wave" ${(item.modePaiement)==='Wave'?'selected':''}>🌊 Wave</option>
+            <option value="Orange Money" ${(item.modePaiement)==='Orange Money'?'selected':''}>🍊 OM</option>
+            <option value="Moov / MTN" ${(item.modePaiement)==='Moov / MTN'?'selected':''}>📱 MoMo</option>
+            <option value="Virement / Carte" ${(item.modePaiement)==='Virement / Carte'?'selected':''}>💳 Virement</option>
+            <option value="Autre" ${(item.modePaiement)==='Autre'?'selected':''}>🛍️ Autre</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Montant encaissé -->
+      <div class="form-group">
+        <label class="form-label">Montant encaissé (FCFA)</label>
+        <input type="number" id="edit-sale-received" class="form-input" inputmode="numeric" value="${item.montantRecu != null ? item.montantRecu : item.prixVente}">
+      </div>
+
+      <!-- Client & Téléphone -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Client (optionnel)</label>
+          <input type="text" id="edit-sale-client" class="form-input" value="${esc(item.client || '')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Téléphone / WhatsApp</label>
+          <input type="tel" id="edit-sale-phone" class="form-input" value="${esc(item.clientTel || '')}">
+        </div>
+      </div>
+
+      <button type="button" class="btn btn-primary" id="btn-edit-sale-save" style="margin-top:14px;">
+        ${getIcon('check')} Mettre à jour la vente
+      </button>
+      <button type="button" class="btn btn-secondary" id="btn-edit-sale-cancel" style="margin-top:8px;">
+        Annuler
+      </button>
+    `;
+
+    sheetc.innerHTML = html;
+    sheet.classList.add('active');
+
+    const close = () => sheet.classList.remove('active');
+    $('#edit-sale-close').onclick = close;
+    $('#btn-edit-sale-cancel').onclick = close;
+
+    $('#btn-edit-sale-save').onclick = async () => {
+      const price = parseFloat($('#edit-sale-price').value);
+      const dateVente = $('#edit-sale-date').value || today();
+      const heureVente = $('#edit-sale-time').value || nowTime();
+      const modePaiement = $('#edit-sale-mode').value;
+      const received = parseFloat($('#edit-sale-received').value);
+      const client = ($('#edit-sale-client').value || '').trim();
+      const clientTel = ($('#edit-sale-phone').value || '').trim();
+
+      if (isNaN(price) || price <= 0) {
+        window.toast.error('Veuillez indiquer un prix de vente valide.');
+        return;
+      }
+
+      item.prixVente = price;
+      item.dateVente = dateVente;
+      item.heureVente = heureVente;
+      item.modePaiement = modePaiement;
+      item.montantRecu = isNaN(received) ? price : received;
+      item.monnaieRendue = Math.max(0, item.montantRecu - price);
+      item.resteDu = Math.max(0, price - item.montantRecu);
+      item.client = client;
+      item.clientTel = clientTel;
+      if (!item.log) item.log = [];
+      item.log.push({ d: today(), t: `Vente modifiée (Date: ${fd(dateVente)} à ${heureVente}, Prix: ${fmt(price)})` });
+
+      await window.appDB.put(item);
+      window.toast.success('Informations de la vente mises à jour !');
+      close();
+      render();
+    };
+  }
   function renderAddView() {
     const isEdit = !!state.editingItem;
     const it = state.editingItem || {};
     const drops = getDropsList();
     const categories = getCategoriesList();
     const photoSrc = state.draftPhoto || it.photo || '';
+    const isSold = !!it.vendu;
 
     return `
       <div class="form-card">
-        <h2 style="font-size:18px; font-weight:800; margin-bottom:16px;">
+        <h2 style="font-size:18px; font-weight:800; margin-bottom:14px;">
           ${isEdit ? `Modifier l'article #${it.n}` : 'Ajouter un nouveau vêtement'}
         </h2>
+
+        <!-- Sélecteur de statut : En stock ou Déjà vendu -->
+        <div class="form-group" style="margin-bottom:16px;">
+          <label class="form-label">Statut initial de la pièce</label>
+          <div class="status-selector-grid">
+            <button type="button" class="status-choice-btn ${!isSold ? 'active' : ''}" id="btn-choice-stock" data-status="stock">
+              📦 En Stock (Disponible)
+            </button>
+            <button type="button" class="status-choice-btn ${isSold ? 'active' : ''}" id="btn-choice-sold" data-status="sold">
+              ⚡ Déjà Vendu (Enregistrer la vente)
+            </button>
+          </div>
+          <input type="hidden" id="form-is-sold" value="${isSold ? '1' : '0'}">
+        </div>
 
         <!-- Téléversement Photo -->
         <label class="photo-uploader" for="photo-file-input">
@@ -627,14 +1293,64 @@
           </div>
         </div>
 
-        <!-- Notes / Emplacement -->
+        <!-- SECTION DÉDIÉE : INFORMATIONS DE VENTE (affichée si Déjà Vendu est sélectionné) -->
+        <div id="sold-fields-section" class="${isSold ? '' : 'hide'}" style="background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px; margin:16px 0;">
+          <div style="font-size:14px; font-weight:800; color:var(--primary); margin-bottom:12px; display:flex; align-items:center; gap:6px;">
+            ${getIcon('receipt')} Informations de la Vente Conclue
+          </div>
+
+          <!-- Date de vente & Heure de vente -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Date de vente *</label>
+              <input type="date" id="form-date-vente" class="form-input" value="${it.dateVente || today()}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Heure de vente</label>
+              <input type="time" id="form-heure-vente" class="form-input" value="${it.heureVente || nowTime()}">
+            </div>
+          </div>
+
+          <!-- Prix de vente réel & Mode de règlement -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Prix vendu réel (FCFA) *</label>
+              <input type="number" id="form-prix-vente" class="form-input" inputmode="numeric" placeholder="Ex: 9000" value="${it.prixVente || it.prevu || ''}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Mode de règlement</label>
+              <select id="form-mode-paiement" class="form-select">
+                <option value="Espèces" ${(it.modePaiement||'Espèces')==='Espèces'?'selected':''}>💵 Espèces</option>
+                <option value="Wave" ${(it.modePaiement)==='Wave'?'selected':''}>🌊 Wave</option>
+                <option value="Orange Money" ${(it.modePaiement)==='Orange Money'?'selected':''}>🍊 Orange Money</option>
+                <option value="Moov / MTN" ${(it.modePaiement)==='Moov / MTN'?'selected':''}>📱 MoMo</option>
+                <option value="Virement / Carte" ${(it.modePaiement)==='Virement / Carte'?'selected':''}>💳 Virement / Carte</option>
+                <option value="Autre" ${(it.modePaiement)==='Autre'?'selected':''}>🛍️ Autre</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Montant encaissé & Téléphone -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Montant encaissé (FCFA)</label>
+              <input type="number" id="form-montant-recu" class="form-input" inputmode="numeric" placeholder="Montant reçu" value="${it.montantRecu != null ? it.montantRecu : (it.prixVente || it.prevu || '')}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Téléphone acheteur (WhatsApp)</label>
+              <input type="tel" id="form-client-tel" class="form-input" placeholder="Ex: +225 07..." value="${esc(it.clientTel || '')}">
+            </div>
+          </div>
+        </div>
+
+        <!-- Notes / Acheteur -->
         <div class="form-group">
-          <label class="form-label">Notes & Acheteur (optionnel)</label>
+          <label class="form-label">Nom du client ou Notes (optionnel)</label>
           <input 
             type="text" 
             id="form-client" 
             class="form-input" 
-            placeholder="Ex: Réservé pour Sarah, petite tache au dos..." 
+            placeholder="Ex: Marc, petite tache au dos..." 
             value="${esc(it.client || '')}"
           />
         </div>
@@ -654,6 +1370,32 @@
   function bindAddEvents() {
     const fileInput = $('#photo-file-input');
     const removePhotoBtn = $('#photo-remove-btn');
+    const choiceStock = $('#btn-choice-stock');
+    const choiceSold = $('#btn-choice-sold');
+    const soldSection = $('#sold-fields-section');
+    const isSoldInput = $('#form-is-sold');
+
+    // Bascule En Stock vs Déjà Vendu
+    if (choiceStock && choiceSold) {
+      choiceStock.addEventListener('click', () => {
+        choiceStock.classList.add('active');
+        choiceSold.classList.remove('active');
+        isSoldInput.value = '0';
+        if (soldSection) soldSection.classList.add('hide');
+      });
+
+      choiceSold.addEventListener('click', () => {
+        choiceSold.classList.add('active');
+        choiceStock.classList.remove('active');
+        isSoldInput.value = '1';
+        if (soldSection) soldSection.classList.remove('hide');
+        const prevuVal = $('#form-prevu').value;
+        const prixVenteInput = $('#form-prix-vente');
+        if (prixVenteInput && !prixVenteInput.value && prevuVal) {
+          prixVenteInput.value = prevuVal;
+        }
+      });
+    }
 
     if (fileInput) {
       fileInput.addEventListener('change', async (e) => {
@@ -701,6 +1443,7 @@
         const categorie = $('#form-cat').value;
         const dateAchat = $('#form-date-achat').value || today();
         const client = ($('#form-client').value || '').trim();
+        const isSold = isSoldInput.value === '1';
 
         if (!nom) {
           window.toast.error('Veuillez indiquer le nom de la pièce.');
@@ -712,6 +1455,35 @@
           window.toast.error('Veuillez renseigner un prix d\'achat valide.');
           $('#form-achat').focus();
           return;
+        }
+
+        // Si l'article est marqué vendu, valider les champs de vente
+        let prixVente = 0;
+        let dateVente = '';
+        let heureVente = '';
+        let modePaiement = '';
+        let montantRecu = 0;
+        let monnaieRendue = 0;
+        let resteDu = 0;
+        let clientTel = '';
+        let recuNo = '';
+
+        if (isSold) {
+          prixVente = parseFloat($('#form-prix-vente').value);
+          dateVente = $('#form-date-vente').value || today();
+          heureVente = $('#form-heure-vente').value || nowTime();
+          modePaiement = $('#form-mode-paiement').value || 'Espèces';
+          const recuInputVal = parseFloat($('#form-montant-recu').value);
+          montantRecu = isNaN(recuInputVal) ? prixVente : recuInputVal;
+          monnaieRendue = Math.max(0, montantRecu - prixVente);
+          resteDu = Math.max(0, prixVente - montantRecu);
+          clientTel = ($('#form-client-tel').value || '').trim();
+
+          if (isNaN(prixVente) || prixVente <= 0) {
+            window.toast.error('Veuillez indiquer le prix de vente réel de l\'article.');
+            $('#form-prix-vente').focus();
+            return;
+          }
         }
 
         const isEdit = !!state.editingItem;
@@ -729,22 +1501,54 @@
           item.client = client;
           if (state.draftPhoto) item.photo = state.draftPhoto;
 
+          if (isSold) {
+            item.vendu = true;
+            item.prixVente = prixVente;
+            item.dateVente = dateVente;
+            item.heureVente = heureVente;
+            item.modePaiement = modePaiement;
+            item.montantRecu = montantRecu;
+            item.monnaieRendue = monnaieRendue;
+            item.resteDu = resteDu;
+            item.clientTel = clientTel;
+            if (!item.recuNo) item.recuNo = `REC-${dateVente.replace(/-/g, '')}-${String(item.n).padStart(3, '0')}`;
+          } else {
+            item.vendu = false;
+            item.prixVente = 0;
+            item.dateVente = '';
+            item.heureVente = '';
+            item.modePaiement = '';
+            item.montantRecu = 0;
+            item.monnaieRendue = 0;
+            item.resteDu = 0;
+          }
+
           if (!item.log) item.log = [];
           item.log.push({
             d: today(),
-            t: `Article modifié (Achat: ${fmt(achat)}, Prévu: ${fmt(prevu)})`
+            t: isSold 
+              ? `Article vendu le ${fd(dateVente)} à ${heureVente} pour ${fmt(prixVente)} (${modePaiement})` 
+              : `Article modifié en stock (Achat: ${fmt(achat)}, Prévu: ${fmt(prevu)})`
           });
 
           await window.appDB.put(item);
-          window.toast.success('Article mis à jour avec succès !');
           state.editingItem = null;
           state.draftPhoto = '';
-          switchView('stock');
+
+          if (isSold) {
+            window.toast.success('Vente enregistrée avec succès !');
+            switchView('sales');
+            showReceiptModal(item);
+          } else {
+            window.toast.success('Article mis à jour en stock !');
+            switchView('stock');
+          }
         } else {
           // Création d'un nouvel article
+          const newN = nextNumber();
           const newItem = {
             id: Date.now(),
-            n: nextNumber(),
+            n: newN,
             drop,
             categorie,
             nom,
@@ -753,21 +1557,42 @@
             achat,
             prevu,
             dateAchat,
-            vendu: false,
-            prixVente: 0,
-            dateVente: '',
+            vendu: isSold,
+            prixVente: isSold ? prixVente : 0,
+            dateVente: isSold ? dateVente : '',
+            heureVente: isSold ? heureVente : '',
+            modePaiement: isSold ? modePaiement : '',
+            montantRecu: isSold ? montantRecu : 0,
+            monnaieRendue: isSold ? monnaieRendue : 0,
+            resteDu: isSold ? resteDu : 0,
             client,
+            clientTel: isSold ? clientTel : '',
+            recuNo: isSold ? `REC-${dateVente.replace(/-/g, '')}-${String(newN).padStart(3, '0')}` : '',
             log: [
               { d: dateAchat, t: `Acheté ${fmt(achat)}` }
             ]
           };
 
+          if (isSold) {
+            newItem.log.push({
+              d: dateVente,
+              t: `Vendu ${fmt(prixVente)} à ${heureVente} (${modePaiement})${client ? ' à ' + client : ''}`
+            });
+          }
+
           state.items.push(newItem);
           await window.appDB.put(newItem);
-          window.toast.success(`Article #${newItem.n} enregistré !`);
           state.draftPhoto = '';
-          state.filter = 'dispo';
-          switchView('stock');
+
+          if (isSold) {
+            window.toast.success(`Vente de l'article #${newItem.n} enregistrée !`);
+            switchView('sales');
+            showReceiptModal(newItem);
+          } else {
+            window.toast.success(`Article #${newItem.n} enregistré en stock !`);
+            state.filter = 'dispo';
+            switchView('stock');
+          }
         }
       });
     }
@@ -1061,22 +1886,11 @@
 
       <div class="section-title">Outils & Données</div>
       <div class="settings-group">
-        <div class="settings-item" id="btn-load-sample">
-          <div class="settings-info">
-            <div class="settings-icon">${getIcon('sparkles')}</div>
-            <div>
-              <div class="settings-title">Charger les données de démonstration</div>
-              <div class="settings-desc">Ajoute 5 pièces réalistes pour tester toutes les fonctionnalités.</div>
-            </div>
-          </div>
-          <div>${getIcon('arrowUpRight')}</div>
-        </div>
-
         <div class="settings-item" id="btn-clear-db">
           <div class="settings-info">
             <div class="settings-icon" style="color:var(--danger);">${getIcon('trash')}</div>
             <div>
-              <div class="settings-title" style="color:var(--danger);">Effacer toutes les données</div>
+              <div class="settings-title" style="color:var(--danger);">Effacer tout le stock</div>
               <div class="settings-desc">Supprime définitivement les articles stockés (${totalItems} éléments).</div>
             </div>
           </div>
@@ -1164,20 +1978,6 @@
         }
         window.appDB.exportCSV(state.items);
         window.toast.success('Fichier Excel CSV téléchargé !');
-      });
-    }
-
-    const sampleBtn = $('#btn-load-sample');
-    if (sampleBtn) {
-      sampleBtn.addEventListener('click', async () => {
-        localStorage.removeItem('cc_was_cleared');
-        const samples = window.appDB.getSampleData();
-        for (const it of samples) {
-          await window.appDB.put(it, true);
-        }
-        state.items = await window.appDB.getAll();
-        window.toast.success('Données de démo chargées !');
-        switchView('stock');
       });
     }
 
@@ -1275,9 +2075,9 @@
         ` : (item.client ? `<div><strong>Notes / Réservation : </strong>${esc(item.client)}</div>` : '')}
       </div>
 
-      <!-- Bouton Reçu en vedette si l'article est déjà vendu -->
+      <!-- Bouton Reçu & Modification si l'article est déjà vendu -->
       ${isVendu ? `
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:8px;">
           <button type="button" class="btn btn-primary" id="btn-sheet-view-receipt">
             ${getIcon('receipt')} Reçu de Caisse
           </button>
@@ -1285,6 +2085,9 @@
             ${getIcon('whatsapp')} WhatsApp
           </button>
         </div>
+        <button type="button" class="btn btn-secondary" id="btn-sheet-edit-sale" style="width:100%; margin-bottom:14px;">
+          ${getIcon('edit')} Modifier les détails de la vente
+        </button>
       ` : ''}
 
       <!-- FORMULAIRE DE VENTE PRO (POS) si article en stock -->
@@ -1442,6 +2245,15 @@
     if (waReceiptBtn) {
       waReceiptBtn.onclick = () => {
         showReceiptModal(item);
+      };
+    }
+
+    // Modifier la vente
+    const editSaleBtn = $('#btn-sheet-edit-sale');
+    if (editSaleBtn) {
+      editSaleBtn.onclick = () => {
+        closeSheet();
+        openEditSaleModal(item);
       };
     }
 
